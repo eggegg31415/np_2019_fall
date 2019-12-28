@@ -10,8 +10,10 @@
 #define SA struct sockaddr
 #define MAXLINE 1024
 #define LISTENQ 10
+#define LEVEL 22
 
 char name[MAXLINE];
+char progressbar[LEVEL+1][LEVEL+1];
 struct trans{
     int len;
     int ctl;    //0: file content; 1: file info; 2: text
@@ -25,8 +27,7 @@ void fun(int sockfd, char msg[]){
         token = strtok(NULL, "");
         token = strtok(token, "\n");
         FILE *fp = fopen(token, "r");
-        struct trans snddata;
-        int check;
+        struct trans snddata, rcvdata;
 
         //get file size
         if(fp == NULL){
@@ -46,8 +47,7 @@ void fun(int sockfd, char msg[]){
         while(snddata.len = read(fileno(fp), snddata.data, MAXLINE)){
             snddata.ctl = 0;
             sprintf(snddata.file, "%s", token);
-            check = write(sockfd, &snddata, sizeof(snddata));
-            printf("check vlaue: %d\n", check);
+            write(sockfd, &snddata, sizeof(snddata));
         }
     }
     else if(strncmp(token, "sleep", 5) == 0){
@@ -73,8 +73,9 @@ void fun(int sockfd, char msg[]){
 }
 void rcvmsg(int sockfd){
     struct trans rcvdata;
-    char msg[MAXLINE];
-    int len;
+    char msg[MAXLINE], rcvfile[MAXLINE];
+    int len, rcvlen, cnt = 0;
+    FILE *fp;
     fcntl(fileno(stdin), F_SETFL, O_NONBLOCK);
     fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
@@ -82,8 +83,42 @@ void rcvmsg(int sockfd){
         if((len = read(fileno(stdin), msg, sizeof(msg))) > 0)
             fun(sockfd, msg);
         if((len = read(sockfd, &rcvdata, sizeof(rcvdata))) > 0){
-            if(rcvdata.ctl == 2)
+            if(rcvdata.ctl == 1){       //receive file info
+                fp = fopen(rcvdata.file, "wb");
+                rcvlen = rcvdata.len;
+                sprintf(rcvfile, "%s", rcvdata.file);
+                printf("[Download] %s Start!\n", rcvfile);
+            }
+            else if(rcvdata.ctl == 0){  //receive file content
+                write(fileno(fp), rcvdata.data, rcvdata.len);
+                //generate progress bar
+                float unit = rcvlen/LEVEL;
+                int per = 0;
+                for(int i=0; i<=LEVEL; i++){
+                    if(unit*i >= cnt || i == LEVEL){
+                        per = i;
+                        break;
+                    }
+                }
+                if(! (cnt%(1024*16))){
+                    printf("Progress : [%s]\r", progressbar[per]);
+                    fflush(stdout);
+                }
+
+                //check eof
+                cnt += rcvdata.len;
+                if(cnt == rcvlen){
+                    printf("Progress : [%s]\n", progressbar[LEVEL]);
+                    fflush(stdout);
+                    printf("[Download] %s Finish!\n", rcvfile);
+                    cnt = 0;
+                    rcvlen = 0;
+                }
+            }
+            else if(rcvdata.ctl == 2){  //receive output msg
                 printf("%s", rcvdata.data);
+                fflush(stdout);
+            }
         }
     }
 }
@@ -105,7 +140,13 @@ int main(int argc, char *argv[]){
     servaddr.sin_port = htons( atoi(argv[2]) );
     servaddr.sin_addr.s_addr = inet_addr(argv[1]);
     sprintf(name, "%s", argv[3]);
-
+    for(int i=0; i<=LEVEL; i++){
+        for(int j=0; j<i; j++)
+            progressbar[i][j] = '#';
+        for(int j=LEVEL-1; j>=i; j--)
+            progressbar[i][j] = ' ';
+        progressbar[i][LEVEL] = 0;
+    }
 
     if((connect(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0){
         printf("Connect error!!\n");

@@ -1,6 +1,6 @@
 all:
-	gcc -O3 -std=gnu11 -o server server.c
-	gcc -O3 -std=gnu11 -o client client.c
+	gcc -O0 -g -std=gnu11 -o server server.c
+	gcc -O0 -g -std=gnu11 -o client client.c
 
 tt:
 	gcc tt.c -std=gnu11

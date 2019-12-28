@@ -25,6 +25,43 @@ struct trans{
     char data[MAXLINE];
 };
 
+void download(char filename[], int src){
+    FILE *fp = fopen(filename, "rb");
+    int target[LISTENQ], filesize = size[src];
+    int tarnum = 0;
+    char name[MAXLINE];
+    struct trans snddata;
+
+    size[src] = 0;
+    cnt[src] = 0;
+
+    sprintf(name, "%s", username[src]);
+    for(int i=0; i<LISTENQ; i++){
+        if(client[i] > 0){
+            if(i != src && strncmp(name, username[i], sizeof(name)) == 0)
+                target[tarnum ++] = i;
+        }
+    }
+    //send file info
+    snddata.len = filesize;
+    snddata.ctl = 1;
+    sprintf(snddata.file, "%s", filename);
+    for(int i=0; i<tarnum; i++){
+        int num = target[i];
+        write(client[num], &snddata, sizeof(snddata));
+    }
+
+    //send file content
+    while(snddata.len = read(fileno(fp), snddata.data, MAXLINE)){
+        snddata.ctl = 0;
+        sprintf(snddata.file, "%s", filename);
+        for(int i=0; i<tarnum; i++){
+            int num = target[i];
+            write(client[num], &snddata, sizeof(snddata));
+        }
+    }
+}
+
 void rcvmsg(int sockfd, int num){
     struct trans rcvdata, snddata;
     char msg[MAXLINE];
@@ -38,14 +75,14 @@ void rcvmsg(int sockfd, int num){
         sprintf(username[num], "");
     }
     else if(len > 0){
-        if(rcvdata.ctl == 1){
+        if(rcvdata.ctl == 1){           //change data info
             size[num] = rcvdata.len;
             file[num] = fopen(rcvdata.file, "w");
             snddata.ctl = 2;
             sprintf(snddata.data, "[Upload] %s Start!\n", rcvdata.file);
             write(sockfd, &snddata, sizeof(snddata));
         }
-        else if(rcvdata.ctl == 0){
+        else if(rcvdata.ctl == 0){      //upload data to server
             float unit = size[num]/LEVEL;
             int per;
             int output = fileno(file[num]);
@@ -59,21 +96,21 @@ void rcvmsg(int sockfd, int num){
                 }
             }
             sprintf(snddata.data, "Progress : [%s]\r", progressbar[per]);
-            printf("%s", snddata.data);
-            fflush(stdout);
             snddata.ctl = 2;
             write(sockfd, &snddata, sizeof(snddata));
             if(cnt[num] == size[num]){
+                printf("Trans end!!\n");
                 sprintf(snddata.data, "Progress : [%s]\n", progressbar[LEVEL]);
                 snddata.ctl = 2;
                 write(sockfd, &snddata, sizeof(snddata));
-                printf("%s", snddata.data);
 
-                cnt[num] = 0;
                 snddata.ctl = 2;
                 sprintf(snddata.data, "[Upload] %s Finish!\n", rcvdata.file);
                 write(sockfd, &snddata, sizeof(snddata));
-                printf("%s", snddata.data);
+                fclose(file[num]);
+
+                //transmit file to other session
+                download(rcvdata.file, num);
             }
         }
     }
