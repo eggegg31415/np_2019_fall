@@ -21,7 +21,7 @@ struct trans{
     char data[MAXLINE];
 };
 
-void fun(int sockfd, char msg[]){
+void fun(int sockfd, char msg[], int pid){
     char *token = strtok(msg, " ");
     if(strncmp(token, "put", 3) == 0){
         token = strtok(NULL, "");
@@ -53,15 +53,15 @@ void fun(int sockfd, char msg[]){
     else if(strncmp(token, "sleep", 5) == 0){
         token = strtok(NULL, "");
         if(token == NULL){
-            printf("Sleep <sec>\n");
+            printf("Pid: %d Sleep <sec>\n");
             return;
         }
         int time = atoi(token);
         for(int i=1; i<=time; i++){
-            printf("Sleep %d\n", i);
+            printf("Pid: %d Sleep %d\n", pid, i);
             sleep(1);
         }
-        printf("Client wake up\n");
+        printf("Pid: %d Client wake up\n", pid);
     }
     else if(strncmp(token, "exit", 4) == 0){
         close(sockfd);
@@ -71,7 +71,7 @@ void fun(int sockfd, char msg[]){
         printf("Error Command\n");
     }
 }
-void rcvmsg(int sockfd){
+void rcvmsg(int sockfd, int pid){
     struct trans rcvdata;
     char msg[MAXLINE], rcvfile[MAXLINE];
     int len, rcvlen, cnt = 0;
@@ -81,13 +81,13 @@ void rcvmsg(int sockfd){
 
     while(1){
         if((len = read(fileno(stdin), msg, sizeof(msg))) > 0)
-            fun(sockfd, msg);
+            fun(sockfd, msg, pid);
         if((len = read(sockfd, &rcvdata, sizeof(rcvdata))) > 0){
             if(rcvdata.ctl == 1){       //receive file info
                 fp = fopen(rcvdata.file, "wb");
                 rcvlen = rcvdata.len;
                 sprintf(rcvfile, "%s", rcvdata.file);
-                printf("[Download] %s Start!\n", rcvfile);
+                printf("Pid: %d [Download] %s Start!\n", pid, rcvfile);
             }
             else if(rcvdata.ctl == 0){  //receive file content
                 write(fileno(fp), rcvdata.data, rcvdata.len);
@@ -101,22 +101,22 @@ void rcvmsg(int sockfd){
                     }
                 }
                 if(! (cnt%(1024*16))){
-                    printf("Progress : [%s]\r", progressbar[per]);
+                    printf("Pid: %d Progress : [%s]\r", pid, progressbar[per]);
                     fflush(stdout);
                 }
 
                 //check eof
                 cnt += rcvdata.len;
                 if(cnt == rcvlen){
-                    printf("Progress : [%s]\n", progressbar[LEVEL]);
+                    printf("Pid: %d Progress : [%s]\n", pid, progressbar[LEVEL]);
                     fflush(stdout);
-                    printf("[Download] %s Finish!\n", rcvfile);
+                    printf("Pid: %d [Download] %s Finish!\n", pid, rcvfile);
                     cnt = 0;
                     rcvlen = 0;
                 }
             }
             else if(rcvdata.ctl == 2){  //receive output msg
-                printf("%s", rcvdata.data);
+                printf("Pid: %d %s", pid, rcvdata.data);
                 fflush(stdout);
             }
         }
@@ -132,6 +132,7 @@ int main(int argc, char *argv[]){
 
     //initialize
     int sockfd;
+    int pid = getpid();
     struct sockaddr_in servaddr;
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -154,7 +155,7 @@ int main(int argc, char *argv[]){
     }
 
     //connection built
-    printf("Welcome to the dropbox-like server: %s\n", name);
+    printf("Pid: %d Welcome to the dropbox-like server: %s\n", pid, name);
     write(sockfd, name, MAXLINE);
-    rcvmsg(sockfd);
+    rcvmsg(sockfd, pid);
 }
