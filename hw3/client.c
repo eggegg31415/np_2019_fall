@@ -11,6 +11,7 @@
 #define MAXLINE 1024
 #define LISTENQ 10
 #define LEVEL 22
+#define DELAY 33000
 
 char name[MAXLINE];
 char progressbar[LEVEL+1][LEVEL+1];
@@ -36,6 +37,9 @@ void fun(int sockfd, char msg[], int pid){
         }
         fseek(fp, 0, SEEK_END);
         int filesize = ftell(fp);
+        int unit = filesize/LEVEL;
+        int cnt = 0, per = 0;
+
         snddata.len = filesize;
         snddata.ctl = 1;
         sprintf(snddata.file, "%s", token);
@@ -44,11 +48,27 @@ void fun(int sockfd, char msg[], int pid){
         fp = fopen(token, "r");
 
         //send data
+        printf("Pid: %d [Upload] %s Start!\n", pid, snddata.file);
         while(snddata.len = read(fileno(fp), snddata.data, MAXLINE)){
             snddata.ctl = 0;
             sprintf(snddata.file, "%s", token);
             write(sockfd, &snddata, sizeof(snddata));
+
+            //print progressbar
+            cnt += snddata.len;
+            for(int i=0; i<=LEVEL; i++){
+                if(unit*i >= cnt || i == LEVEL){
+                    if(i > per){
+                        per = i;
+                        printf("Pid: %d Progress : [%s]\r", pid, progressbar[per]);
+                        fflush(stdout);
+                    }
+                    break;
+                }
+            }
+            usleep(DELAY);
         }
+        printf("Pid: %d Progress : [%s]\n", pid, progressbar[LEVEL]);
     }
     else if(strncmp(token, "sleep", 5) == 0){
         token = strtok(NULL, "");

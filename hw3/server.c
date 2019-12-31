@@ -13,9 +13,9 @@
 #define LISTENQ 10
 #define MAXLINE 1024
 #define LEVEL 22
+#define DELAY 15000
 
 char username[LISTENQ][MAXLINE];
-char progressbar[LEVEL+1][LEVEL+1];
 int client[LISTENQ];
 int size[LISTENQ];
 int cnt[LISTENQ];
@@ -47,6 +47,7 @@ void download(char filename[], int num, int filesize){
         snddata.ctl = 0;
         sprintf(snddata.file, "%s", filename);
         write(sockfd, &snddata, sizeof(snddata));
+        usleep(DELAY);
     }
     fclose(fp);
 }
@@ -71,9 +72,8 @@ void broadcast(char filename[], int src){
                 target[tarnum ++] = i;
         }
     }
-    for(int i=0; i<tarnum; i++){
+    for(int i=0; i<tarnum; i++)
         download(filename, target[i], filesize);
-    }
 }
 
 void rcvmsg(int sockfd, int num){
@@ -92,14 +92,11 @@ void rcvmsg(int sockfd, int num){
         if(rcvdata.ctl == 1){           //change data info
             char path[MAXLINE];
             sprintf(path, "%s/%s", username[num], rcvdata.file);   //<username>/<filename>
-            //printf("path: %s\n", path);
+            printf("path: %s\n", path);
 
             size[num] = rcvdata.len;
             file[num] = fopen(path, "wb");
             snddata.ctl = 2;
-
-            sprintf(snddata.data, "[Upload] %s Start!\n", rcvdata.file);
-            write(sockfd, &snddata, sizeof(snddata));
         }
         else if(rcvdata.ctl == 0){      //upload data to server
             float unit = size[num]/LEVEL;
@@ -107,23 +104,10 @@ void rcvmsg(int sockfd, int num){
 
             write(fileno(file[num]), rcvdata.data, rcvdata.len);
             cnt[num] += rcvdata.len;
-            for(int j=0; j<=LEVEL; j++){
-                if(unit*j >= cnt[num] || j == LEVEL){
-                    per = j;
-                    break;
-                }
-            }
+            printf("%s: %d/%d\n", rcvdata.file, cnt[num], size[num]);
 
-            if(! (cnt[num]%(1024*16))){
-                sprintf(snddata.data, "Progress : [%s]\r", progressbar[per]);
-                snddata.ctl = 2;
-                write(sockfd, &snddata, sizeof(snddata));
-            }
             if(cnt[num] == size[num]){
-                //printf("Trans end!!\n");
-                sprintf(snddata.data, "Progress : [%s]\n", progressbar[LEVEL]);
-                snddata.ctl = 2;
-                write(sockfd, &snddata, sizeof(snddata));
+                printf("Trans end!!\n");
 
                 snddata.ctl = 2;
                 sprintf(snddata.data, "[Upload] %s Finish!\n", rcvdata.file);
@@ -149,7 +133,7 @@ void checkclient(int listenfd){
                     break;
             client[i] = connfd;
             read(connfd, name, MAXLINE);
-            //printf("%s is connected!\n", name);
+            printf("%s is connected!\n", name);
             sprintf(username[i], "%s", name);
             fcntl(connfd, F_SETFL, O_NONBLOCK);
 
@@ -207,12 +191,6 @@ int main(int argc, char *argv[]){
     for(int i=0; i<LISTENQ; i++){
         client[i] = -1;
         sprintf(username[i], "");
-    }
-    for(int i=0; i<=LEVEL; i++){
-        for(int j=0; j<i; j++)
-            progressbar[i][j] = '#';
-        for(int j=LEVEL-1; j>=i; j--)
-            progressbar[i][j] = ' ';
     }
 
     //start receving data
