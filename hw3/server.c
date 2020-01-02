@@ -11,9 +11,10 @@
 #include<netinet/in.h>
 #define SA struct sockaddr
 #define LISTENQ 10
-#define MAXLINE 1000
+#define MAXLINE 3600
 #define LEVEL 22
-#define DELAY 20000
+#define DELAY 210000
+#define MDELAY 200000
 
 char username[LISTENQ][MAXLINE];
 int client[LISTENQ];
@@ -23,7 +24,7 @@ FILE* file[LISTENQ];
 struct trans{
     int len;
     int ctl;    //0: file content; 1: file info; 2: text
-    char file[MAXLINE];
+    char file[10];
     char data[MAXLINE];
 };
 
@@ -43,11 +44,17 @@ void download(char filename[], int num, int filesize){
     write(sockfd, &snddata, sizeof(snddata));
 
     //send file content
+    int cnt = 0;
+    int unit = filesize/LEVEL;
+    int delay = filesize > 400000 ? MDELAY : DELAY;
+
     while(snddata.len = read(fileno(fp), snddata.data, MAXLINE)){
         snddata.ctl = 0;
         sprintf(snddata.file, "%s", filename);
         write(sockfd, &snddata, sizeof(snddata));
-        usleep(DELAY);
+        cnt += snddata.len;
+        if(cnt/unit > (cnt-snddata.len)/unit)
+            usleep(delay);
     }
     fclose(fp);
 }

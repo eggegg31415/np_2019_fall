@@ -9,17 +9,17 @@
 #include<arpa/inet.h>
 #define max(a, b) a>b?a:b
 #define SA struct sockaddr
-#define MAXLINE 1000
+#define MAXLINE 3600
 #define LISTENQ 10
 #define LEVEL 22
-#define DELAY 20000
+#define DELAY 200000
 
 char name[MAXLINE];
 char progressbar[LEVEL+1][LEVEL+1];
 struct trans{
     int len;
     int ctl;    //0: file content; 1: file info; 2: text
-    char file[MAXLINE];
+    char file[10];
     char data[MAXLINE];
 };
 
@@ -63,11 +63,11 @@ void fun(int sockfd, char msg[], int pid){
                         per = i;
                         printf("Pid: %d Progress : [%s]\r", pid, progressbar[per]);
                         fflush(stdout);
+                        usleep(DELAY);
                     }
                     break;
                 }
             }
-            usleep(DELAY);
         }
         printf("Pid: %d Progress : [%s]\n", pid, progressbar[LEVEL]);
     }
@@ -84,9 +84,6 @@ void fun(int sockfd, char msg[], int pid){
         }
         printf("Pid: %d Client wake up\n", pid);
 
-        //struct trans snddata;
-        //snddata.ctl = 2;
-        //write(sockfd, &snddata, sizeof(snddata));
     }
     else if(strncmp(token, "exit", 4) == 0){
         close(sockfd);
@@ -136,7 +133,7 @@ void rcvmsg(int sockfd, int pid){
                         break;
                     }
                 }
-                if(! (cnt%(1024*16))){
+                if(cnt/unit > (cnt-rcvlen)/unit){
                     printf("Pid: %d Progress : [%s]\r", pid, progressbar[per]);
                     fflush(stdout);
                 }
