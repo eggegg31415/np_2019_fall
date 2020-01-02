@@ -11,9 +11,9 @@
 #include<netinet/in.h>
 #define SA struct sockaddr
 #define LISTENQ 10
-#define MAXLINE 1024
+#define MAXLINE 1000
 #define LEVEL 22
-#define DELAY 15000
+#define DELAY 20000
 
 char username[LISTENQ][MAXLINE];
 int client[LISTENQ];
@@ -123,11 +123,19 @@ void rcvmsg(int sockfd, int num){
 
 void checkclient(int listenfd){
     int connfd;
+    int maxfd = listenfd, maxi = -1;
+    fd_set allset, rset;
+    FD_ZERO(&allset);
+    FD_SET(listenfd, &allset);
 
     while(1){
-        if((connfd = accept(listenfd, NULL, NULL)) > 0){
+        rset = allset;
+        int nready = select(maxfd+1, &rset, NULL, NULL, NULL);
+        if(FD_ISSET(listenfd, &rset)){
             int i;
             char name[MAXLINE];
+
+            connfd = accept(listenfd, NULL, NULL);
             for(i=0; i<LISTENQ; i++)
                 if(client[i] < 0)
                     break;
@@ -136,6 +144,10 @@ void checkclient(int listenfd){
             printf("%s is connected!\n", name);
             sprintf(username[i], "%s", name);
             fcntl(connfd, F_SETFL, O_NONBLOCK);
+
+            FD_SET(connfd, &allset);
+            maxfd = connfd > maxfd ? connfd : maxfd;
+            maxi = i > maxi ? i : maxi;
 
             //build user directory
             DIR* dir = opendir(name);
@@ -157,10 +169,17 @@ void checkclient(int listenfd){
             else{
                 mkdir(name, 0777);
             }
+            if(--nready <= 0)
+                continue;
         }
-        for(int i=0; i<LISTENQ; i++){
-            if(client[i] > 0){
-                rcvmsg(client[i], i);
+        for(int i=0; i<=maxi; i++){
+            int sockfd = client[i];
+            if(sockfd < 0)  //empty
+                continue;
+            if(FD_ISSET(sockfd, &rset)){
+                rcvmsg(sockfd, i);
+                if(--nready <= 0)
+                    break;
             }
         }
     }
