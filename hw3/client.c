@@ -7,18 +7,19 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<arpa/inet.h>
+#define max(a, b) a>b?a:b
 #define SA struct sockaddr
-#define MAXLINE 1024
+#define MAXLINE 3600
 #define LISTENQ 10
 #define LEVEL 22
-#define DELAY 33000
+#define DELAY 200000
 
 char name[MAXLINE];
 char progressbar[LEVEL+1][LEVEL+1];
 struct trans{
     int len;
     int ctl;    //0: file content; 1: file info; 2: text
-    char file[MAXLINE];
+    char file[10];
     char data[MAXLINE];
 };
 
@@ -62,11 +63,11 @@ void fun(int sockfd, char msg[], int pid){
                         per = i;
                         printf("Pid: %d Progress : [%s]\r", pid, progressbar[per]);
                         fflush(stdout);
+                        usleep(DELAY);
                     }
                     break;
                 }
             }
-            usleep(DELAY);
         }
         printf("Pid: %d Progress : [%s]\n", pid, progressbar[LEVEL]);
     }
@@ -82,6 +83,7 @@ void fun(int sockfd, char msg[], int pid){
             sleep(1);
         }
         printf("Pid: %d Client wake up\n", pid);
+
     }
     else if(strncmp(token, "exit", 4) == 0){
         close(sockfd);
@@ -99,10 +101,21 @@ void rcvmsg(int sockfd, int pid){
     fcntl(fileno(stdin), F_SETFL, O_NONBLOCK);
     fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
+    fd_set rset;
+    FD_ZERO(&rset);
+
     while(1){
-        if((len = read(fileno(stdin), msg, sizeof(msg))) > 0)
+        FD_SET(0, &rset);
+        FD_SET(sockfd, &rset);
+        int maxfd = max(0, sockfd)+1;
+
+        select(maxfd, &rset, NULL, NULL, NULL);
+        if(FD_ISSET(0, &rset)){
+            len = read(fileno(stdin), msg, sizeof(msg));
             fun(sockfd, msg, pid);
-        if((len = read(sockfd, &rcvdata, sizeof(rcvdata))) > 0){
+        }
+        if(FD_ISSET(sockfd, &rset)){
+            len = read(sockfd, &rcvdata, sizeof(rcvdata));
             if(rcvdata.ctl == 1){       //receive file info
                 fp = fopen(rcvdata.file, "wb");
                 rcvlen = rcvdata.len;
@@ -120,7 +133,7 @@ void rcvmsg(int sockfd, int pid){
                         break;
                     }
                 }
-                if(! (cnt%(1024*16))){
+                if(cnt/unit > (cnt-rcvlen)/unit){
                     printf("Pid: %d Progress : [%s]\r", pid, progressbar[per]);
                     fflush(stdout);
                 }

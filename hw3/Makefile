@@ -11,3 +11,5 @@ tt:
 clean:
 	rm server
 	rm client
+	if [ -d "tom" ]; then rm -rf tom; fi
+	if [ -d "frank" ]; then rm -rf frank; fi

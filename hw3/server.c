@@ -11,9 +11,10 @@
 #include<netinet/in.h>
 #define SA struct sockaddr
 #define LISTENQ 10
-#define MAXLINE 1024
+#define MAXLINE 3600
 #define LEVEL 22
-#define DELAY 15000
+#define DELAY 210000
+#define MDELAY 200000
 
 char username[LISTENQ][MAXLINE];
 int client[LISTENQ];
@@ -23,7 +24,7 @@ FILE* file[LISTENQ];
 struct trans{
     int len;
     int ctl;    //0: file content; 1: file info; 2: text
-    char file[MAXLINE];
+    char file[10];
     char data[MAXLINE];
 };
 
@@ -43,11 +44,17 @@ void download(char filename[], int num, int filesize){
     write(sockfd, &snddata, sizeof(snddata));
 
     //send file content
+    int cnt = 0;
+    int unit = filesize/LEVEL;
+    int delay = filesize > 400000 ? MDELAY : DELAY;
+
     while(snddata.len = read(fileno(fp), snddata.data, MAXLINE)){
         snddata.ctl = 0;
         sprintf(snddata.file, "%s", filename);
         write(sockfd, &snddata, sizeof(snddata));
-        usleep(DELAY);
+        cnt += snddata.len;
+        if(cnt/unit > (cnt-snddata.len)/unit)
+            usleep(delay);
     }
     fclose(fp);
 }
@@ -123,11 +130,19 @@ void rcvmsg(int sockfd, int num){
 
 void checkclient(int listenfd){
     int connfd;
+    int maxfd = listenfd, maxi = -1;
+    fd_set allset, rset;
+    FD_ZERO(&allset);
+    FD_SET(listenfd, &allset);
 
     while(1){
-        if((connfd = accept(listenfd, NULL, NULL)) > 0){
+        rset = allset;
+        int nready = select(maxfd+1, &rset, NULL, NULL, NULL);
+        if(FD_ISSET(listenfd, &rset)){
             int i;
             char name[MAXLINE];
+
+            connfd = accept(listenfd, NULL, NULL);
             for(i=0; i<LISTENQ; i++)
                 if(client[i] < 0)
                     break;
@@ -136,6 +151,10 @@ void checkclient(int listenfd){
             printf("%s is connected!\n", name);
             sprintf(username[i], "%s", name);
             fcntl(connfd, F_SETFL, O_NONBLOCK);
+
+            FD_SET(connfd, &allset);
+            maxfd = connfd > maxfd ? connfd : maxfd;
+            maxi = i > maxi ? i : maxi;
 
             //build user directory
             DIR* dir = opendir(name);
@@ -157,10 +176,17 @@ void checkclient(int listenfd){
             else{
                 mkdir(name, 0777);
             }
+            if(--nready <= 0)
+                continue;
         }
-        for(int i=0; i<LISTENQ; i++){
-            if(client[i] > 0){
-                rcvmsg(client[i], i);
+        for(int i=0; i<=maxi; i++){
+            int sockfd = client[i];
+            if(sockfd < 0)  //empty
+                continue;
+            if(FD_ISSET(sockfd, &rset)){
+                rcvmsg(sockfd, i);
+                if(--nready <= 0)
+                    break;
             }
         }
     }
