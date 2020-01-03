@@ -54,7 +54,7 @@ int main(){
 
         //get mac address
         ioctl(sockfd, SIOCGIFFLAGS, &ifr);
-        if(! ifr.ifr_flags & IFF_LOOPBACK){   //skip loopback interface
+        if(! (ifr.ifr_flags & IFF_LOOPBACK)){   //skip loopback interface
             bzero(&ifr, sizeof(struct ifreq));
             memcpy(ifr.ifr_name, ifpt->ifr_name, sizeof(ifr.ifr_name));
             ioctl(sockfd, SIOCGIFHWADDR, &ifr);
