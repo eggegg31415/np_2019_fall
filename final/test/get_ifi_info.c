@@ -1,5 +1,5 @@
-#include<string.h>
 #include<stdio.h>
+#include<string.h>
 #include<unistd.h>
 #include<netdb.h>
 #include<sys/types.h>
@@ -31,6 +31,12 @@ int main(){
         //get interface name
         printf("[%s]\n", ifpt->ifr_name);
 
+        //get mtu
+        bzero(&ifr, sizeof(struct ifreq));
+        memcpy(ifr.ifr_name, ifpt->ifr_name, sizeof(ifr.ifr_name));
+        ioctl(sockfd, SIOCGIFMTU, &ifr);
+        printf("MTU: %d\n", ifr.ifr_mtu);
+
         //get IP address
         uint32_t addri, maski;
         char addrc[ipsize], maskc[ipsize];
@@ -48,19 +54,19 @@ int main(){
 
         //get mac address
         ioctl(sockfd, SIOCGIFFLAGS, &ifr);
-        if(ifr.ifr_flags & IFF_LOOPBACK){   //skip loopback interface
+        if(! ifr.ifr_flags & IFF_LOOPBACK){   //skip loopback interface
+            bzero(&ifr, sizeof(struct ifreq));
+            memcpy(ifr.ifr_name, ifpt->ifr_name, sizeof(ifr.ifr_name));
+            ioctl(sockfd, SIOCGIFHWADDR, &ifr);
+            printf("Hwaddr: ");
+            for (int i=0; i<6; ++i){
+                if(i != 0)
+                    printf(":");
+                printf("%02x", (unsigned char) ifr.ifr_addr.sa_data[i]);
+            }
             printf("\n");
-            continue;
         }
-        bzero(&ifr, sizeof(struct ifreq));
-        memcpy(ifr.ifr_name, ifpt->ifr_name, sizeof(ifr.ifr_name));
-        ioctl(sockfd, SIOCGIFHWADDR, &ifr);
-        printf("Hwaddr: ");
-        for (int i=0; i<6; ++i){
-            if(i != 0)
-                printf(":");
-            printf("%02x", (unsigned char) ifr.ifr_addr.sa_data[i]);
-        }
-        printf("\n\n");
+
+        printf("\n");
     }
 }
